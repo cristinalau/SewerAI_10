@@ -7,22 +7,20 @@ DECLARE
   v_workorder_uuid RAW(16);
   v_task_uuid      RAW(16);
 BEGIN
-  -- convert WORK_ORDER_UUID
   v_workorder_uuid := HEXTORAW(UPPER(REPLACE(:NEW.WORK_ORDER_UUID, '-', '')));
 
-  -- get TASK_UUID from VIEW (THIS IS THE FIX)
-  SELECT WORK_ORDER_TASK_UUID
-  INTO v_task_uuid
-  FROM CUSTOMERDATA.SEWERAI_INSPECTIONS_V v
-  WHERE v.WORK_ORDER_UUID = v_workorder_uuid
-    AND ROWNUM = 1;
+  SELECT v.WORK_ORDER_TASK_UUID
+    INTO v_task_uuid
+    FROM CUSTOMERDATA.SEWERAI_INSPECTIONS_V v
+   WHERE v.WORK_ORDER_UUID = v_workorder_uuid
+     AND v.WORK_ORDER_TASK_UUID IS NOT NULL
+     AND ROWNUM = 1;
 
-  -- try update first
   UPDATE CUSTOMERDATA.EPSEWERAI_WOT_STG stg
-     SET stg.FEED_STATUS = 'UPDATED'
-   WHERE stg.WORKORDER_UUID = v_workorder_uuid;
+     SET stg.WORKORDER_UUID = v_workorder_uuid,
+         stg.FEED_STATUS = 'UPDATED'
+   WHERE stg.TASK_UUID = v_task_uuid;
 
-  -- if not exist → insert
   IF SQL%ROWCOUNT = 0 THEN
     INSERT INTO CUSTOMERDATA.EPSEWERAI_WOT_STG (
       TASK_UUID,
@@ -44,6 +42,5 @@ BEGIN
 
 EXCEPTION
   WHEN NO_DATA_FOUND THEN
-    -- nothing in view → skip (important to avoid crashes)
     NULL;
 END;
